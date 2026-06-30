@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { exportToZip } from '@/lib/export';
+import { ICON_TAXONOMY } from '@/lib/taxonomy';
 import { Monitor, Check, ChevronDown, Download, AlertCircle, RefreshCw, Layers, Upload, ImageIcon, LinkIcon, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 const STYLE_PILLS = ["Contemporary", "Modern", "Elegant", "Professional", "Clean", "Minimal", "Premium", "Technical", "Rounded", "Sharp", "Outline", "Filled", "Two-tone", "Gradient", "Playful", "Corporate"];
 const STYLE_DESCRIPTIONS: Record<string, string> = {
@@ -33,6 +35,8 @@ type Preset = {
   lineStyle: string;
   cornerRadius: string;
   visualTone: string;
+  exportFormat?: 'SVG' | 'PNG' | 'EPS';
+  exportSize?: number;
 };
 
 export default function IconNestApp() {
@@ -61,8 +65,21 @@ export default function IconNestApp() {
   const [error, setError] = useState<string | null>(null);
   
   const [isGeneratingSet, setIsGeneratingSet] = useState(false);
+  const [isGeneratingVariation, setIsGeneratingVariation] = useState(false);
   const [generatedSet, setGeneratedSet] = useState<{name: string, svg: string, category?: string, tags?: string[]}[] | null>(null);
-  const [viewMode, setViewMode] = useState<'preview' | 'full'>('preview');
+  const [viewMode, setViewMode] = useState<'preview' | 'full' | 'brandKit'>('preview');
+  
+  // Icon Comparison State
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [compareIcons, setCompareIcons] = useState<number[]>([]);
+  
+  // Generate More Icons State
+  const [isGenerateMoreOpen, setIsGenerateMoreOpen] = useState(false);
+  const [isGeneratingMore, setIsGeneratingMore] = useState(false);
+  const [customIconNames, setCustomIconNames] = useState('');
+  
+  const [isGeneratingBrandKit, setIsGeneratingBrandKit] = useState(false);
+  const [brandKit, setBrandKit] = useState<{favicon: string, avatar: string, palette: string} | null>(null);
 
   const [exportFormat, setExportFormat] = useState<'SVG' | 'PNG' | 'EPS'>('SVG');
   const [exportSize, setExportSize] = useState<number>(32);
@@ -72,6 +89,10 @@ export default function IconNestApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIconIdx, setSelectedIconIdx] = useState<number | null>(null);
   const [newTag, setNewTag] = useState("");
+  
+  // Responsive sidebar states
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
 
   const getLuminance = (r: number, g: number, b: number) => {
     const [rs, gs, bs] = [r, g, b].map(c => {
@@ -132,7 +153,9 @@ export default function IconNestApp() {
       colors: brandColors,
       lineStyle,
       cornerRadius,
-      visualTone
+      visualTone,
+      exportFormat,
+      exportSize
     };
     setPresets([...presets, newPreset]);
     setNewPresetName("");
@@ -145,6 +168,8 @@ export default function IconNestApp() {
     setLineStyle(preset.lineStyle);
     setCornerRadius(preset.cornerRadius);
     setVisualTone(preset.visualTone);
+    if (preset.exportFormat) setExportFormat(preset.exportFormat);
+    if (preset.exportSize) setExportSize(preset.exportSize);
     setToast({ message: `Loaded preset: ${preset.name}`, type: "success" });
   };
 
@@ -247,6 +272,41 @@ export default function IconNestApp() {
     }
   };
 
+  const handleGenerateVariation = async () => {
+    if (selectedIconIdx === null || !generatedSet) return;
+    
+    setIsGeneratingVariation(true);
+    setError(null);
+    const selectedIcon = generatedSet[selectedIconIdx];
+    
+    try {
+      const res = await fetch('/api/generate-icon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName,
+          colors: brandColors,
+          visualTone,
+          styles: selectedStyles,
+          useCase: selectedIcon.name,
+          extraComments: "Provide an alternative design or variation for this specific icon concept."
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      const newSet = [...generatedSet];
+      newSet[selectedIconIdx] = { ...selectedIcon, svg: data.svg };
+      setGeneratedSet(newSet);
+      setToast({ message: "Variation generated successfully!", type: "success" });
+    } catch (err: any) {
+      setError(err.message);
+      setToast({ message: "Failed to generate variation.", type: "error" });
+    } finally {
+      setIsGeneratingVariation(false);
+    }
+  };
+
   const handleGenerateSet = async () => {
     setIsGeneratingSet(true);
     setError(null);
@@ -259,12 +319,74 @@ export default function IconNestApp() {
       setGeneratedSet([]); // Clear previous
       setViewMode('full');
 
-      // We will generate the first 3 categories for speed in this demo, 
-      // but the structure allows all.
-      const categories = Object.keys(taxonomy).slice(0, 3);
+      const categories = Object.keys(taxonomy);
+      
+      // We will generate the categories in batches to respect API limits but still produce the full set.
+      const batchSize = 2;
+      for (let i = 0; i < categories.length; i += batchSize) {
+        const batch = categories.slice(i, i + batchSize);
+        
+        const batchPromises = batch.map(async (category) => {
+          const iconsToGenerate = taxonomy[category as keyof typeof taxonomy];
+          
+          const res = await fetch('/api/generate-set', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              brandName,
+              colors: brandColors,
+              visualTone,
+              styles: selectedStyles,
+              category,
+              iconsToGenerate
+            })
+          });
+          
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+          return (data.icons || []).map((icon: any) => ({ ...icon, category }));
+        });
+        
+        const results = await Promise.allSettled(batchPromises);
+        
+        results.forEach(result => {
+          if (result.status === 'fulfilled') {
+            const mappedIcons = result.value;
+            allIcons = [...allIcons, ...mappedIcons];
+          } else {
+            console.error("Failed to generate a category:", result.reason);
+          }
+        });
+        
+        // Update UI incrementally after each batch
+        setGeneratedSet([...allIcons]);
+      }
+      
+      setChatHistory(prev => [...prev, { role: 'system', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), text: `Full core icon set generated successfully (${allIcons.length} icons).` }]);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsGeneratingSet(false);
+      if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+    }
+  };
 
-      for (const category of categories) {
-        const iconsToGenerate = taxonomy[category as keyof typeof taxonomy];
+  const handleGenerateMoreIcons = async () => {
+    if (!customIconNames.trim()) return;
+    
+    setIsGeneratingMore(true);
+    setError(null);
+    setGenerationDuration(0);
+    durationIntervalRef.current = setInterval(() => setGenerationDuration(prev => prev + 1), 1000);
+    
+    const allIconsToGenerate = customIconNames.split(',').map(s => s.trim()).filter(Boolean);
+    const chunkSize = 15;
+    let allNewIcons: any[] = [];
+    
+    try {
+      // Chunking to prevent AI timeouts for very large sets (e.g. 100+ icons)
+      for (let i = 0; i < allIconsToGenerate.length; i += chunkSize) {
+        const chunk = allIconsToGenerate.slice(i, i + chunkSize);
         
         const res = await fetch('/api/generate-set', {
           method: 'POST',
@@ -274,24 +396,65 @@ export default function IconNestApp() {
             colors: brandColors,
             visualTone,
             styles: selectedStyles,
-            category,
-            iconsToGenerate: iconsToGenerate.slice(0, 12) // Limiting per category for speed
+            category: 'Custom / Added',
+            iconsToGenerate: chunk
           })
         });
         
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         
-        const mappedIcons = (data.icons || []).map((icon: any) => ({ ...icon, category }));
-        allIcons = [...allIcons, ...mappedIcons];
-        setGeneratedSet(allIcons);
+        const mappedIcons = (data.icons || []).map((icon: any) => ({ ...icon, category: 'Custom / Added' }));
+        allNewIcons = [...allNewIcons, ...mappedIcons];
+        
+        // Update incrementally
+        setGeneratedSet(prev => {
+          const base = prev || [];
+          return [...base, ...mappedIcons];
+        });
       }
       
-      setChatHistory(prev => [...prev, { role: 'system', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), text: `Full icon set generated successfully (${allIcons.length} icons).` }]);
+      setChatHistory(prev => [...prev, { role: 'system', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), text: `Added ${allNewIcons.length} new icons.` }]);
+      
+      setCustomIconNames('');
+      setIsGenerateMoreOpen(false);
+      setToast({ message: `Successfully added ${allNewIcons.length} icons.`, type: 'success' });
+    } catch (err: any) {
+      setError(err.message);
+      setToast({ message: 'Failed to generate more icons.', type: 'error' });
+    } finally {
+      setIsGeneratingMore(false);
+      if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+    }
+  };
+
+  const handleGenerateBrandKit = async () => {
+    setIsGeneratingBrandKit(true);
+    setError(null);
+    setGenerationDuration(0);
+    durationIntervalRef.current = setInterval(() => setGenerationDuration(prev => prev + 1), 1000);
+    
+    try {
+      const res = await fetch('/api/generate-brand-kit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName,
+          colors: brandColors,
+          visualTone,
+          styles: selectedStyles
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      setBrandKit(data);
+      setViewMode('brandKit');
+      setChatHistory(prev => [...prev, { role: 'system', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), text: `Brand Kit generated successfully.` }]);
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsGeneratingSet(false);
+      setIsGeneratingBrandKit(false);
       if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
     }
   };
@@ -346,69 +509,92 @@ export default function IconNestApp() {
         </div>
       )}
       {/* Top Nav */}
-      <nav className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-5 shrink-0">
+      <nav className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-5 shrink-0">
         <div className="flex items-center gap-3">
+          <button 
+            className="md:hidden p-1.5 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors"
+            onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
+          >
+            {leftSidebarOpen ? <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> : <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>}
+          </button>
           <div className="bg-blue-600 w-8 h-8 rounded-lg flex items-center justify-center">
             <Layers className="text-white w-5 h-5" />
           </div>
-          <span className="font-bold text-lg tracking-tight">IconNest <span className="text-slate-500 font-normal">Studio</span></span>
+          <span className="font-bold text-lg tracking-tight hidden sm:inline-block">IconNest <span className="text-slate-500 font-normal">Studio</span></span>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="text-sm text-slate-500 flex items-center gap-2">
+        <div className="flex items-center gap-3 md:gap-6">
+          <div className="text-xs md:text-sm text-slate-500 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
-            Brand: <strong className="text-slate-800">{brandName}</strong> Sync Active
+            <span className="hidden sm:inline-block">Brand: <strong className="text-slate-800">{brandName}</strong> Sync Active</span>
+            <span className="sm:hidden text-slate-800 font-bold truncate max-w-[80px]">{brandName}</span>
           </div>
-          <div className="h-8 w-px bg-slate-200"></div>
+          <div className="hidden md:block h-8 w-px bg-slate-200"></div>
           <div className="flex gap-2 items-center">
-            <select 
-              value={exportFormat} 
-              onChange={e => setExportFormat(e.target.value as any)}
-              className="border border-slate-200 bg-white text-slate-600 rounded-md px-2 py-1.5 text-xs focus:outline-none"
-            >
-              <option value="SVG">SVG</option>
-              <option value="PNG">PNG</option>
-              <option value="EPS">EPS</option>
-            </select>
-            {exportFormat === 'PNG' && (
+            <div className="hidden sm:flex gap-2 items-center">
               <select 
-                value={exportSize} 
-                onChange={e => setExportSize(Number(e.target.value))}
+                value={exportFormat} 
+                onChange={e => setExportFormat(e.target.value as any)}
                 className="border border-slate-200 bg-white text-slate-600 rounded-md px-2 py-1.5 text-xs focus:outline-none"
               >
-                <option value={16}>16px</option>
-                <option value={20}>20px</option>
-                <option value={24}>24px</option>
-                <option value={32}>32px</option>
-                <option value={48}>48px</option>
-                <option value={64}>64px</option>
-                <option value={128}>128px</option>
-                <option value={256}>256px</option>
-                <option value={512}>512px</option>
+                <option value="SVG">SVG</option>
+                <option value="PNG">PNG</option>
+                <option value="EPS">EPS</option>
               </select>
-            )}
+              {exportFormat === 'PNG' && (
+                <select 
+                  value={exportSize} 
+                  onChange={e => setExportSize(Number(e.target.value))}
+                  className="border border-slate-200 bg-white text-slate-600 rounded-md px-2 py-1.5 text-xs focus:outline-none"
+                >
+                  <option value={16}>16px</option>
+                  <option value={20}>20px</option>
+                  <option value={24}>24px</option>
+                  <option value={32}>32px</option>
+                  <option value={48}>48px</option>
+                  <option value={64}>64px</option>
+                  <option value={128}>128px</option>
+                  <option value={256}>256px</option>
+                  <option value={512}>512px</option>
+                </select>
+              )}
+            </div>
             <button 
               onClick={handleExport}
               disabled={!generatedSet}
-              className="bg-blue-600 text-white rounded-md px-4 py-2 font-medium text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-              <Download className="w-4 h-4" /> Export
+              className="bg-blue-600 text-white rounded-md px-3 md:px-4 py-1.5 md:py-2 font-medium text-xs md:text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+              <Download className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden sm:inline-block">Export</span>
+            </button>
+            <button 
+              className="md:hidden p-1.5 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors"
+              onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+            >
+              {rightSidebarOpen ? <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> : <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="21" y2="21"/><line x1="4" x2="20" y1="14" y2="14"/><line x1="4" x2="20" y1="7" y2="7"/></svg>}
             </button>
           </div>
         </div>
       </nav>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile Backdrop */}
+        {(leftSidebarOpen || rightSidebarOpen) && (
+          <div 
+            className="md:hidden absolute inset-0 bg-slate-900/20 backdrop-blur-sm z-30" 
+            onClick={() => { setLeftSidebarOpen(false); setRightSidebarOpen(false); }}
+          />
+        )}
+        
         {/* Sidebar Left */}
-        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
+        <aside className={`w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 absolute inset-y-0 left-0 z-40 transform transition-transform duration-300 md:relative md:translate-x-0 ${leftSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
           <div className="flex border-b border-slate-200 shrink-0">
             <button 
               onClick={() => setSidebarTab('brand')}
-              className={`flex-1 py-3 text-[10px] font-semibold uppercase tracking-wide transition-colors ${sidebarTab === 'brand' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 py-4 text-[10px] font-semibold uppercase tracking-wide transition-colors ${sidebarTab === 'brand' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Brand Setup
             </button>
             <button 
               onClick={() => setSidebarTab('presets')}
-              className={`flex-1 py-3 text-[10px] font-semibold uppercase tracking-wide transition-colors ${sidebarTab === 'presets' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 py-4 text-[10px] font-semibold uppercase tracking-wide transition-colors ${sidebarTab === 'presets' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Preset Library
             </button>
@@ -417,7 +603,7 @@ export default function IconNestApp() {
           {sidebarTab === 'brand' ? (
             <>
               <div className="p-5 border-b border-slate-100">
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Brand Identity</label>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Brand Identity</label>
                 
                 <div className="space-y-3 mb-4">
                   <div>
@@ -508,7 +694,7 @@ export default function IconNestApp() {
               </div>
               
               <div className="p-5 flex-1 overflow-y-auto">
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Style Parameters</label>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Style Parameters</label>
                 <div className="flex flex-wrap gap-1.5 mb-5">
                   {STYLE_PILLS.map(style => {
                     const isSelected = selectedStyles.includes(style);
@@ -516,7 +702,7 @@ export default function IconNestApp() {
                     <div key={style} className="relative group">
                       <button 
                         onClick={() => toggleStyle(style)}
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wide transition-all duration-200 ${isSelected ? 'bg-slate-800 text-white shadow-sm border border-slate-800' : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-0.5 hover:shadow-sm'}`}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-medium tracking-wide transition-all duration-200 ${isSelected ? 'bg-slate-800 text-white shadow-sm border border-slate-800' : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-0.5 hover:shadow-sm'}`}
                       >
                         {isSelected && <Check className="w-3 h-3" />}
                         {style}
@@ -549,7 +735,7 @@ export default function IconNestApp() {
           ) : (
             <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
               <div className="flex flex-col gap-2">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Save Current</label>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Save Current</label>
                 <div className="flex gap-2">
                   <input 
                     type="text" 
@@ -569,7 +755,7 @@ export default function IconNestApp() {
               </div>
 
               <div className="flex flex-col gap-2 mt-4">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Saved Presets</label>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1">Saved Presets</label>
                 {presets.length === 0 ? (
                   <div className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-lg border border-dashed border-slate-200 text-center">No presets saved yet.</div>
                 ) : (
@@ -619,18 +805,46 @@ export default function IconNestApp() {
             <div className="flex gap-3">
               <div className="bg-slate-100 p-1 rounded-md flex gap-0.5">
                 <button 
-                  onClick={() => setViewMode('preview')}
+                  onClick={() => { setViewMode('preview'); setIsCompareMode(false); }}
                   className={`px-2 py-1 text-xs rounded transition-colors ${viewMode === 'preview' ? 'bg-white border border-slate-200 shadow-sm font-semibold text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   Preview Icon
                 </button>
                 <button 
-                  onClick={() => setViewMode('full')}
+                  onClick={() => { setViewMode('full'); setIsCompareMode(false); }}
                   className={`px-2 py-1 text-xs rounded transition-colors ${viewMode === 'full' ? 'bg-white border border-slate-200 shadow-sm font-semibold text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  Full Set (12)
+                  Full Set (200+)
+                </button>
+                <button 
+                  onClick={() => { setViewMode('brandKit'); setIsCompareMode(false); }}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${viewMode === 'brandKit' ? 'bg-white border border-slate-200 shadow-sm font-semibold text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Brand Kit
                 </button>
               </div>
+              
+              {viewMode === 'full' && generatedSet && generatedSet.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setIsGenerateMoreOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
+                  >
+                    <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    Add More Icons
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsCompareMode(!isCompareMode);
+                      setCompareIcons([]);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${isCompareMode ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'}`}
+                  >
+                    <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3L4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/></svg>
+                    {isCompareMode ? 'Cancel Compare' : 'Compare Icons'}
+                  </button>
+                </>
+              )}
             </div>
             <div className="flex gap-3 items-center">
               {viewMode === 'full' && (
@@ -715,7 +929,7 @@ export default function IconNestApp() {
                   </div>
                 ) : error ? (
                   <div className={`flex flex-col items-center gap-3 text-center px-6 ${canvasBg === 'dark' ? 'text-slate-300' : 'text-slate-500'}`}>
-                    <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-1">
+                    <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-1">
                       <AlertCircle className="w-6 h-6" />
                     </div>
                     <span className="text-slate-800 font-semibold text-base">Service briefly busy</span>
@@ -747,7 +961,7 @@ export default function IconNestApp() {
                   <div className={`absolute bottom-4 right-4 text-[10px] font-mono px-2 py-1 rounded ${canvasBg === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-white text-slate-400 shadow-sm border border-slate-100'}`}>preview-icon.svg</div>
                 )}
               </div>
-            ) : (
+            ) : viewMode === 'full' ? (
               <div className="w-full max-w-4xl max-h-full overflow-y-auto bg-white rounded-xl shadow-lg border border-slate-200 p-8">
                 {isGeneratingSet ? (
                   <div className="h-64 flex flex-col items-center justify-center gap-4 text-slate-400">
@@ -759,7 +973,7 @@ export default function IconNestApp() {
                   </div>
                 ) : error && !generatedSet ? (
                   <div className="h-64 flex flex-col items-center justify-center gap-3 text-center px-6 text-slate-500">
-                    <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-1">
+                    <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-1">
                       <AlertCircle className="w-6 h-6" />
                     </div>
                     <span className="text-slate-800 font-semibold text-base">Service briefly busy</span>
@@ -793,21 +1007,37 @@ export default function IconNestApp() {
                             {filteredCategoryIcons.map((icon, idx) => {
                               const globalIdx = generatedSet.indexOf(icon);
                               return (
-                                <div 
+                                <motion.div 
                                   key={globalIdx} 
-                                  className={`flex flex-col items-center gap-3 cursor-pointer ${selectedIconIdx === globalIdx ? 'ring-2 ring-blue-500 rounded-lg p-1' : ''}`}
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, globalIdx)}
-                                  onDragOver={handleDragOver}
-                                  onDrop={(e) => handleDrop(e, globalIdx)}
-                                  onClick={() => setSelectedIconIdx(globalIdx)}
+                                  initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  transition={{ duration: 0.3, delay: idx * 0.05, ease: "easeOut" }}
                                 >
                                   <div 
-                                    className="w-16 h-16 text-slate-800 [&>svg]:w-full [&>svg]:h-full p-2 border border-slate-100 rounded-lg hover:border-blue-200 hover:shadow-sm transition-all bg-white"
-                                    dangerouslySetInnerHTML={{ __html: icon.svg }}
-                                  />
-                                  <div className="text-[10px] text-slate-500 font-mono pointer-events-none text-center max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2">{icon.name}.svg</div>
-                                </div>
+                                    className={`flex flex-col items-center gap-3 cursor-pointer ${isCompareMode ? (compareIcons.includes(globalIdx) ? 'ring-2 ring-blue-500 bg-blue-50/50 rounded-lg p-1' : '') : (selectedIconIdx === globalIdx ? 'ring-2 ring-blue-500 rounded-lg p-1' : '')}`}
+                                    draggable={!isCompareMode}
+                                    onDragStart={(e) => !isCompareMode && handleDragStart(e, globalIdx)}
+                                    onDragOver={!isCompareMode ? handleDragOver : undefined}
+                                    onDrop={(e) => !isCompareMode && handleDrop(e, globalIdx)}
+                                    onClick={() => {
+                                      if (isCompareMode) {
+                                        if (compareIcons.includes(globalIdx)) {
+                                          setCompareIcons(compareIcons.filter(id => id !== globalIdx));
+                                        } else if (compareIcons.length < 2) {
+                                          setCompareIcons([...compareIcons, globalIdx]);
+                                        }
+                                      } else {
+                                        setSelectedIconIdx(globalIdx);
+                                      }
+                                    }}
+                                  >
+                                    <div 
+                                      className="w-16 h-16 text-slate-800 [&>svg]:w-full [&>svg]:h-full p-2 border border-slate-100 rounded-lg hover:border-blue-200 hover:shadow-sm transition-all bg-white"
+                                      dangerouslySetInnerHTML={{ __html: icon.svg }}
+                                    />
+                                    <div className="text-[10px] text-slate-500 font-mono pointer-events-none text-center max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2">{icon.name}.svg</div>
+                                  </div>
+                                </motion.div>
                               );
                             })}
                           </div>
@@ -829,7 +1059,71 @@ export default function IconNestApp() {
                   </div>
                 )}
               </div>
-            )}
+            ) : viewMode === 'brandKit' ? (
+              <div className="w-full max-w-5xl h-full flex flex-col gap-6 overflow-y-auto px-4 py-8">
+                {isGeneratingBrandKit ? (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400">
+                    <div className="relative w-12 h-12 flex items-center justify-center">
+                      <svg className="animate-spin text-blue-500 w-12 h-12 absolute inset-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                      <span className="text-[10px] font-mono font-medium">{generationDuration}s</span>
+                    </div>
+                    <span className="text-sm font-medium">Generating Brand Kit...</span>
+                  </div>
+                ) : brandKit ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Favicon Card */}
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center gap-6">
+                      <div className="w-full border-b border-slate-100 pb-3 flex justify-between items-center">
+                        <span className="font-semibold text-slate-700 text-sm">Favicon</span>
+                        <span className="text-[10px] font-mono text-slate-400">32x32</span>
+                      </div>
+                      <div className="w-24 h-24 flex items-center justify-center p-4 bg-slate-50 border border-slate-100 rounded-lg shadow-inner [&>svg]:w-full [&>svg]:h-full" dangerouslySetInnerHTML={{__html: brandKit.favicon}} />
+                    </div>
+                    
+                    {/* Avatar Card */}
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center gap-6">
+                      <div className="w-full border-b border-slate-100 pb-3 flex justify-between items-center">
+                        <span className="font-semibold text-slate-700 text-sm">Social Avatar</span>
+                        <span className="text-[10px] font-mono text-slate-400">512x512</span>
+                      </div>
+                      <div className="w-32 h-32 flex items-center justify-center rounded-full overflow-hidden shadow-md [&>svg]:w-full [&>svg]:h-full bg-slate-50 border border-slate-100" dangerouslySetInnerHTML={{__html: brandKit.avatar}} />
+                    </div>
+
+                    {/* Palette Card */}
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center gap-6 lg:col-span-1 md:col-span-2 lg:col-start-auto">
+                      <div className="w-full border-b border-slate-100 pb-3 flex justify-between items-center">
+                        <span className="font-semibold text-slate-700 text-sm">Primary Palette</span>
+                        <span className="text-[10px] font-mono text-slate-400">400x200</span>
+                      </div>
+                      <div className="w-full max-w-[400px] aspect-[2/1] rounded-lg overflow-hidden shadow-sm [&>svg]:w-full [&>svg]:h-full border border-slate-100 bg-slate-50" dangerouslySetInnerHTML={{__html: 
+                        brandColors.length > 0 ? (() => {
+                          const colorWidth = 400 / brandColors.length;
+                          return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="100%" height="100%">
+                            <defs>
+                              <clipPath id="rounded">
+                                <rect x="0" y="0" width="400" height="200" rx="16" ry="16" />
+                              </clipPath>
+                            </defs>
+                            <g clip-path="url(#rounded)">
+                              ${brandColors.map((color, i) => `<rect x="${i * colorWidth}" y="0" width="${colorWidth + 1}" height="200" fill="${color}" />`).join('')}
+                            </g>
+                            <text x="20" y="170" font-family="sans-serif" font-weight="bold" font-size="24" fill="${getContrastRatio(brandColors[0], '#ffffff') > 2.5 ? '#ffffff' : '#000000'}">${brandName || 'Brand'}</text>
+                          </svg>`;
+                        })() : brandKit.palette
+                      }} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400 text-center">
+                     <span className="text-slate-700 font-semibold text-base">Brand Kit</span>
+                     <span className="text-xs max-w-[280px] text-slate-500">Generate a unified brand kit including a favicon, social media avatar, and primary color palette based on your current settings.</span>
+                     <button onClick={handleGenerateBrandKit} className="mt-4 bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+                       Generate Kit
+                     </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             {/* Bottom Floating Bar */}
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 px-5 py-2.5 rounded-full flex gap-5 text-white text-[11px] font-medium tracking-wide shadow-2xl">
@@ -843,19 +1137,33 @@ export default function IconNestApp() {
         </main>
 
         {/* Sidebar Right */}
-        <aside className="w-[280px] bg-white border-l border-slate-200 flex flex-col shrink-0">
+        <aside className={`w-[280px] bg-white border-l border-slate-200 flex flex-col shrink-0 absolute inset-y-0 right-0 z-40 transform transition-transform duration-300 md:relative md:translate-x-0 ${rightSidebarOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full'}`}>
           {viewMode === 'full' && selectedIconIdx !== null && generatedSet && generatedSet[selectedIconIdx] ? (
             <div className="flex flex-col h-full">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Icon Properties</label>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Icon Properties</label>
                 <button onClick={() => setSelectedIconIdx(null)} className="text-slate-400 hover:text-slate-600">
                   <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
               </div>
               <div className="p-5 flex-1 flex flex-col gap-4 overflow-y-auto">
-                <div className="w-full aspect-square border border-slate-200 rounded-lg p-6 bg-slate-50 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full text-slate-800"
-                  dangerouslySetInnerHTML={{ __html: generatedSet[selectedIconIdx].svg }}
-                />
+                <div className="flex flex-col gap-3">
+                  <div className="w-full aspect-square border border-slate-200 rounded-lg p-6 bg-slate-50 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full text-slate-800"
+                    dangerouslySetInnerHTML={{ __html: generatedSet[selectedIconIdx].svg }}
+                  />
+                  <button
+                    onClick={handleGenerateVariation}
+                    disabled={isGeneratingVariation}
+                    className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-md py-2 px-3 text-xs font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                  >
+                    {isGeneratingVariation ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    )}
+                    Generate Variation
+                  </button>
+                </div>
                 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Name</label>
@@ -922,7 +1230,7 @@ export default function IconNestApp() {
           ) : (
             <>
               <div className="p-5 border-b border-slate-100">
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Master Controls</label>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4">Master Controls</label>
                 <div className="grid grid-cols-1 gap-2.5">
                   <button 
                     onClick={handleGeneratePreview}
@@ -942,7 +1250,7 @@ export default function IconNestApp() {
               </div>
               
               <div className="p-5 flex-1 flex flex-col min-h-0">
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Comments & Iterations</label>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Comments & Iterations</label>
                 <div className="flex-1 bg-slate-50 border border-slate-100 rounded-lg p-3 text-xs mb-3 overflow-y-auto flex flex-col gap-3">
                   {chatHistory.map((msg, idx) => (
                     <div key={idx} className={`${msg.role === 'user' ? 'border-l-2 border-blue-600 pl-2' : ''}`}>
@@ -984,6 +1292,144 @@ export default function IconNestApp() {
           )}
         </aside>
       </div>
+      
+      {/* Generate More Icons Overlay */}
+      <AnimatePresence>
+        {isGenerateMoreOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-8"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col"
+            >
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <h3 className="font-bold text-slate-800 text-lg">Generate Additional Icons</h3>
+                <button 
+                  onClick={() => setIsGenerateMoreOpen(false)} 
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors disabled:opacity-50"
+                  disabled={isGeneratingMore}
+                >
+                  <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+              <div className="p-6 flex flex-col gap-6">
+                
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Quick Add Groups</label>
+                  <div className="flex flex-wrap gap-2 mb-4 max-h-32 overflow-y-auto p-2 bg-slate-50 border border-slate-100 rounded-lg">
+                    {Object.entries(ICON_TAXONOMY).map(([groupName, icons]) => (
+                      <button
+                        key={groupName}
+                        onClick={() => {
+                          const currentNames = customIconNames.split(',').map(s => s.trim()).filter(Boolean);
+                          const newNames = Array.from(new Set([...currentNames, ...icons])).join(', ');
+                          setCustomIconNames(newNames);
+                        }}
+                        className="px-2.5 py-1 text-[10px] font-medium bg-white border border-slate-200 text-slate-600 rounded-md hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm"
+                      >
+                        + {groupName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Required Icons (comma separated)</label>
+                  <textarea 
+                    placeholder="e.g. Shopping cart, user settings, billing history..."
+                    value={customIconNames}
+                    onChange={(e) => setCustomIconNames(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] resize-y"
+                    disabled={isGeneratingMore}
+                  />
+                  <p className="text-xs text-slate-500 mt-2">
+                    Enter any specific icons you need. They will be generated in the current brand style and appended to your active set. For a large enterprise-grade set, you can paste in standard grouped lists (e.g., Billing and finance).
+                  </p>
+                </div>
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button 
+                    onClick={() => setIsGenerateMoreOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors disabled:opacity-50"
+                    disabled={isGeneratingMore}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleGenerateMoreIcons}
+                    disabled={!customIconNames.trim() || isGeneratingMore}
+                    className="px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isGeneratingMore ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Generating... ({generationDuration}s)
+                      </>
+                    ) : (
+                      'Generate Icons'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Icon Comparison Overlay */}
+      <AnimatePresence>
+        {isCompareMode && compareIcons.length === 2 && generatedSet && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-8"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-full"
+            >
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <h3 className="font-bold text-slate-800 text-lg">Icon Comparison</h3>
+                <button 
+                  onClick={() => setCompareIcons([])} 
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors"
+                >
+                  <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+              <div className="flex-1 p-6 flex flex-col md:flex-row gap-8 overflow-y-auto">
+                <div className="flex-1 flex flex-col items-center gap-4">
+                  <div className="w-full aspect-square border border-slate-200 bg-slate-50 rounded-xl p-8 flex items-center justify-center shadow-inner [&>svg]:w-full [&>svg]:h-full"
+                    dangerouslySetInnerHTML={{ __html: generatedSet[compareIcons[0]].svg }}
+                  />
+                  <div className="text-center w-full bg-slate-100 py-2 rounded-md font-mono text-xs text-slate-600 border border-slate-200 font-medium truncate px-4">
+                    {generatedSet[compareIcons[0]].name}.svg
+                  </div>
+                </div>
+                <div className="hidden md:flex flex-col items-center justify-center text-slate-300">
+                  <svg className="w-8 h-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3L4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/></svg>
+                </div>
+                <div className="flex-1 flex flex-col items-center gap-4">
+                  <div className="w-full aspect-square border border-slate-200 bg-slate-50 rounded-xl p-8 flex items-center justify-center shadow-inner [&>svg]:w-full [&>svg]:h-full"
+                    dangerouslySetInnerHTML={{ __html: generatedSet[compareIcons[1]].svg }}
+                  />
+                  <div className="text-center w-full bg-slate-100 py-2 rounded-md font-mono text-xs text-slate-600 border border-slate-200 font-medium truncate px-4">
+                    {generatedSet[compareIcons[1]].name}.svg
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <footer className="h-6 bg-slate-900 text-slate-400 text-[10px] flex items-center px-4 justify-between shrink-0 font-medium tracking-wide">
         <div>WCAG 2.2 AA Compliant • System Health: Nominal</div>

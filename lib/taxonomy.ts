@@ -1,115 +1,72 @@
 export const ICON_TAXONOMY = {
-  "Navigation and Layout": [
-    "Dashboard", "Home", "Sidebar", "Menu", "More", "Search", "Command palette", "Breadcrumbs", 
-    "Tabs", "Panel", "Split view", "Grid", "List", "Kanban", "Table", "Timeline", "Calendar", 
-    "Activity", "Workspace", "App switcher", "Dock", "Fullscreen", "Minimize", "Expand", 
-    "Collapse", "External link", "Back", "Forward", "Up", "Down", "Left", "Right", "Refresh", 
-    "Sync", "Reload"
+  "Navigation": [
+    "Home", "Dashboard", "Search", "Explore", "Menu", "Sidebar", "Tabs", "Breadcrumbs", 
+    "More", "Back", "Forward", "Refresh", "Close", "Expand", "Collapse", "Grid view", 
+    "List view", "Split view", "Kanban", "Timeline"
   ],
-  "Accounts and Users": [
-    "User", "Users", "Team", "Organization", "Organization chart", "Profile", "Avatar", 
-    "Guest", "Invite", "Add user", "Remove user", "Role", "Permission", "Access control", 
-    "Membership", "Subscription user", "Admin", "Owner", "Moderator", "Support agent", 
-    "Verified user", "Block user", "Mute user", "Switch account", "Sign in", "Sign up", 
-    "Logout", "Lock account", "Unlock account", "Impersonate", "Session", "Profile edit"
+  "Workspace": [
+    "Projects", "Workspaces", "Teams", "Departments", "Collections", "Library", 
+    "Favorites", "Recents", "Pinned", "Archive", "Drafts", "Templates", "Tags", 
+    "Categories", "Folders"
   ],
-  "Security and Trust": [
-    "Lock", "Shield", "Shield check", "Shield alert", "Shield off", "Key", "Key round", 
-    "Key square", "Password", "Fingerprint", "Face ID", "2FA", "MFA", "Passkey", 
-    "Certificate", "Verification badge", "Warning", "Alert triangle", "Info", "Error", 
-    "Breach", "Threat", "Privacy", "Incognito", "Encryption", "Decryption", "Firewall", 
-    "VPN", "Audit log", "Compliance", "Policy", "Consent", "Cookie", "Secure folder", 
-    "Secure cloud"
+  "User and identity": [
+    "Profile", "User", "Users", "Group", "Role", "Permission", "Login", "Logout", 
+    "Sign up", "Invite user", "Switch account", "Avatar", "Verified", "Guest", 
+    "Impersonate"
   ],
-  "Notifications and Communication": [
-    "Bell", "Bell off", "Inbox", "Mail", "Mail open", "Send", "Reply", "Reply all", 
-    "Forward message", "Message", "Chat", "Chat bubble", "Thread", "Comment", "Mention", 
-    "Announcement", "Broadcast", "SMS", "Phone", "Call", "Video call", "Voice note", 
-    "Presence online", "Presence offline", "Mute conversation", "Archive conversation", 
-    "Spam", "Starred message"
+  "Communication": [
+    "Messages", "Chat", "Email", "Notifications", "Announcements", "Inbox", "Reply", 
+    "Forward", "Comment", "Mention", "Mention all", "Thread", "Call", "Video call", 
+    "Broadcast"
   ],
-  "Files and Content": [
-    "File", "File text", "File code", "File image", "File video", "File audio", "File PDF", 
-    "File spreadsheet", "File presentation", "File archive", "File zip", "Folder", 
-    "Folder open", "Folder plus", "Folder lock", "Folder share", "Document", "Draft", 
-    "Published", "Review", "Version history", "Duplicate file", "Move file", "Download", 
-    "Upload", "Import", "Export", "Cloud file", "Trash", "Restore", "Bookmark", "Star", 
-    "Tag", "Label"
+  "Collaboration": [
+    "Share", "Collaborate", "Assign", "Approve", "Review", "Request changes", "Watch", 
+    "Follow", "Unfollow", "Presence", "Activity feed", "Handshake", "Meeting", "Calendar"
   ],
-  "Actions and Controls": [
-    "Add", "Plus", "Minus", "Close", "Check", "Check circle", "X", "Edit", "Pencil", 
-    "Pen tool", "Save", "Delete", "Copy", "Cut", "Paste", "Duplicate", "Share", "Link", 
-    "Unlink", "Pin", "Unpin", "Favorite", "Unfavorite", "Move", "Drag handle", "Sort", 
-    "Filter", "Clear filter", "Find", "Replace", "Toggle", "Switch", "More vertical", 
-    "More horizontal", "Undo", "Redo", "Undo history", "Reset", "Confirm", "Cancel", 
-    "Apply", "Retry", "Recreate", "Regenerate"
+  "Files and content": [
+    "File", "Files", "Document", "Docs", "Image", "Video", "Audio", "Link", "Upload", 
+    "Download", "Import", "Export", "Copy", "Paste", "Duplicate", "Version history", 
+    "Compare", "Preview", "Edit", "Delete"
   ],
-  "Analytics and Reporting": [
-    "Analytics", "Chart bar", "Chart line", "Chart pie", "Chart area", "Chart scatter", 
-    "KPI", "Revenue", "Profit", "Growth", "Decline", "Trend up", "Trend down", "Funnel", 
-    "Cohort", "Heatmap", "Segments", "Forecast", "Goal", "Target", "Benchmark", "Scorecard", 
-    "Dashboard widget", "Report", "Report chart", "Insights", "Recommendation", "Metric", 
-    "Performance", "Conversion", "Retention", "Churn", "Event", "Traffic", "Audience", 
-    "Reach", "Impressions"
+  "Data and analytics": [
+    "Analytics", "Reports", "Chart", "Bar chart", "Line chart", "Pie chart", "KPI", 
+    "Metrics", "Trends", "Funnel", "Cohort", "Table", "Pivot", "Filter", "Sort", 
+    "Segment", "Insights", "Forecast", "Drill down"
   ],
-  "Billing and Commerce": [
-    "Credit card", "Debit card", "Wallet", "Coin", "Bank", "Invoice", "Receipt", "Payment", 
-    "Payment success", "Payment failed", "Refund", "Subscription", "Plan", "Pricing", 
-    "Upgrade", "Downgrade", "Trial", "Trial expired", "Coupon", "Discount", "Tax", 
-    "Transaction", "Billing cycle", "Usage", "Credits", "Balance", "Payout", "Purchase", 
-    "Cart", "Checkout", "Store", "Package", "Shipment", "Delivery", "Invoice sent", 
-    "Overdue", "Renewal", "Auto-renew", "Cancel subscription"
+  "Billing and finance": [
+    "Billing", "Invoice", "Subscription", "Plan", "Upgrade", "Downgrade", "Trial", 
+    "Credit card", "Wallet", "Payment", "Refund", "Receipt", "Tax", "Discount", 
+    "Coupon", "Balance", "Usage", "Renewal", "Currency", "Pricing"
   ],
-  "Product and Workflow": [
-    "Create project", "Project", "Board", "Sprint", "Task", "Subtask", "Checklist", 
-    "Milestone", "Roadmap", "Backlog", "Pipeline", "Stage", "Status", "Approved", "Pending", 
-    "Blocked", "In progress", "Done", "Publish", "Schedule", "Queue", "Run", "Pause", 
-    "Stop", "Start", "Trigger", "Workflow", "Automation", "Rule", "Condition", "Approval", 
-    "Signoff", "Handshake", "Handoff", "Dependency", "Merge", "Branch", "Release", "Deploy", 
-    "Rollback"
+  "Settings and admin": [
+    "Settings", "Preferences", "General", "Appearance", "Theme", "Language", 
+    "Integrations", "API keys", "Webhooks", "Developer tools", "Logs", "Audit trail", 
+    "Configuration", "Organization", "Tenant", "Environment", "Feature flags", 
+    "System status", "Maintenance", "Admin panel"
   ],
-  "AI and Development": [
-    "Bot", "Brain", "Spark", "Prompt", "Generate", "Model", "Code", "Terminal", "Brackets", 
-    "Database", "API", "Webhook", "SDK", "Plugin", "Extension", "Git branch", "Commit", 
-    "Pull request", "Merge request", "Environment", "Sandbox", "Test", "Bug", "Fix", "Issue", 
-    "Log", "Monitor", "Server", "Cloud", "Container", "Build", "Version", "Changelog", 
-    "Experiment", "Feature flag", "Evaluation", "Agent", "Orchestration", "Memory", 
-    "Retrieval", "Vector database"
+  "Security": [
+    "Security", "Shield", "Lock", "Unlock", "Key", "Password", "MFA", "SSO", 
+    "Login history", "Device", "Session", "Access control", "Compliance", "Privacy", 
+    "Encryption", "Alert", "Warning", "Block", "Allow", "Trust"
   ],
-  "Devices and Connectivity": [
-    "Smartphone", "Tablet", "Laptop", "Desktop", "Wifi", "Signal", "Bluetooth", 
-    "Bluetooth off", "Network", "Router", "Ethernet", "USB", "Port", "Plug", "Battery", 
-    "Battery charging", "Battery low", "Power", "Power off", "Sync device", "Cast", 
-    "Screen share", "Camera", "Microphone", "Speaker", "Headphones", "Printer", "Scanner", 
-    "GPS", "Location", "Compass", "Satellite", "Satellite dish"
+  "Automation and workflow": [
+    "Workflow", "Automation", "Trigger", "Action", "Rule", "Condition", "If", "Else", 
+    "Scheduler", "Queue", "Job", "Pipeline", "Run", "Pause", "Resume", "Retry", 
+    "Success", "Failure", "Pending", "Sync"
   ],
-  "Time and Scheduling": [
-    "Clock", "Timer", "Stopwatch", "Alarm", "Date", "Deadline", "Meeting", "Reminder", 
-    "Time zone", "Duration", "History", "Recent", "Upcoming", "Recurring", "Snooze", 
-    "Vacation", "Availability"
+  "Support and system": [
+    "Help", "Support", "FAQ", "Contact", "Knowledge base", "Chat support", "Ticket", 
+    "Bug", "Report issue", "Feedback", "Status", "Loading", "Empty state", "Error", 
+    "Info"
   ],
-  "Settings and Preferences": [
-    "Settings", "Sliders", "Tune", "Preferences", "Theme", "Light mode", "Dark mode", 
-    "System theme", "Language", "Localization", "Accessibility", "Font size", "Motion", 
-    "Sound", "Appearance", "Layout settings", "Shortcuts", "Hotkeys", "Keyboard", "Mouse", 
-    "Touch", "Storage", "Cache", "Network settings", "Billing settings", "Account settings", 
-    "Integrations", "API settings"
+  "Commerce and product": [
+    "Catalog", "Product", "Order", "Cart", "Checkout", "Shipment", "Delivery", 
+    "Inventory", "Stock", "Store", "Vendor", "Marketplace", "Offer", "Promotion", "Badge"
   ],
-  "Help and Support": [
-    "Help", "Question", "FAQ", "Docs", "Tutorial", "Guide", "Search docs", "Contact support", 
-    "Ticket", "Ticket closed", "Ticket open", "Chat support", "Community", "Feedback", 
-    "Bug report", "Feature request", "Status page", "Incident", "Maintenance", 
-    "Verified solution", "Knowledge base"
-  ],
-  "Growth and Marketing": [
-    "Campaign", "Megaphone", "Referral", "Gift", "Launch", "Rocket", "Promotion", 
-    "Discount tag", "Lead", "Prospect", "Customer", "Segment", "Email campaign", "Newsletter", 
-    "Landing page", "A/B test", "Attribution", "SEO", "Ads", "Social post", "Viral", "Brand", 
-    "Badge", "Trophy"
-  ],
-  "Commerce and Marketplace": [
-    "Product", "Product variant", "Inventory", "Stock", "Out of stock", "Supplier", 
-    "Vendor", "Order", "Delivery truck", "Return", "Exchange", "Storefront", "Marketplace", 
-    "Favorite product", "Compare", "Wishlist", "Barcode", "QR code"
+  "AI and modern SaaS": [
+    "AI assistant", "Prompt", "Generate", "Spark", "Magic", "Brain", "Bot", "Agent", 
+    "Automation bot", "Model", "Training", "Fine-tuning", "Experiment", "Playground", 
+    "Workspace AI"
   ]
 };
+

@@ -35,6 +35,17 @@ Requirements for each SVG:
         systemInstruction: "You are a specialized SVG generator. You only output valid JSON arrays containing icon names and svg strings.",
         temperature: 0.1,
         responseMimeType: "application/json",
+        responseSchema: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              name: { type: "STRING" },
+              svg: { type: "STRING" }
+            },
+            required: ["name", "svg"]
+          }
+        },
       },
     }));
 
