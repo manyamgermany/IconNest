@@ -1,6 +1,6 @@
 {
-  "name": "IconNest",
-  "description": "An enterprise-grade Icon Making Studio that analyzes brand identity and generates complete, consistent icon sets using generative AI.",
+  "name": "Brand Applet",
+  "description": "Brand generator applet",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

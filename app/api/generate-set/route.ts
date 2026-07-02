@@ -6,7 +6,15 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { 
 
 export async function POST(req: NextRequest) {
   try {
-    const { brandName, colors, visualTone, styles, iconsToGenerate, category } = await req.json();
+    const { brandName, colors, visualTone, styles, iconsToGenerate, category, complexity } = await req.json();
+
+    const complexityDesc = {
+      1: "Ultra-minimal: extremely simplified, maximum 2-3 geometric primitives, thick readable strokes.",
+      2: "Minimal: clean shapes, very few details.",
+      3: "Standard: balanced complexity, standard UI icon level.",
+      4: "Detailed: nuanced, features more linework or layered shapes.",
+      5: "Intricate: highly detailed, complex illustrative vectors."
+    }[complexity as 1|2|3|4|5] || "Standard: balanced complexity, standard UI icon level.";
 
     const prompt = `You are an expert SVG icon designer creating professional, crisp, and high-quality vector icons for an enterprise icon pack.
 Your task is to generate a JSON array containing EXACTLY ${iconsToGenerate.length} icons.
@@ -16,6 +24,7 @@ Brand Information:
 - Brand Name / Tone: ${brandName || 'Generic'} - ${visualTone || 'Neutral'}
 - Primary Colors: ${colors?.join(', ') || 'Monochrome (black/white)'}
 - Selected Styles: ${styles?.join(', ') || 'Clean, Minimal'}
+- Visual Complexity: ${complexityDesc}
 - Category: ${category || 'General'}
 
 Icons to generate:
