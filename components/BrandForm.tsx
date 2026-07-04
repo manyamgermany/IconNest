@@ -1,7 +1,5 @@
 "use client";
-
-import { useState } from "react";
-import { motion } from "motion/react";
+import React, { useState } from "react";
 
 export function BrandForm() {
   const [companyName, setCompanyName] = useState("");
@@ -23,10 +21,7 @@ export function BrandForm() {
   };
 
   return (
-    <motion.form 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+    <form 
       onSubmit={handleSubmit} 
       className="max-w-xl w-full mx-auto p-8 bg-white rounded-2xl shadow-sm border border-gray-100"
     >
@@ -94,6 +89,7 @@ export function BrandForm() {
           )}
         </button>
       </div>
-    </motion.form>
+    </form>
   );
 }
+
